@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTournament } from '../context/TournamentContext';
-import { teams, categories, upload } from '../api/axios';
+import { teams, categories } from '../api/axios';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -20,6 +20,7 @@ import { getImageUrl } from '../utils/helpers'; // ✅ Import the helper
 const ManageTeams = () => {
   const { tournament, tournamentId, loading: tournamentLoading } = useTournament();
   const [teamsData, setTeamsData] = useState([]);
+  const [availablePools, setAvailablePools] = useState([]);
   const [categoriesData, setCategoriesData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -28,6 +29,7 @@ const ManageTeams = () => {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState(null);
+  const [creatingPool, setCreatingPool] = useState(false);
   const [logoFile, setLogoFile] = useState(null);
   const [formData, setFormData] = useState({
     category_id: '',
@@ -68,7 +70,10 @@ const ManageTeams = () => {
   const loadTeams = async (categoryId) => {
     try {
       const res = await teams.get(categoryId);
-      setTeamsData(res.data.data || []);
+      const loadedTeams = res.data.data || [];
+      setTeamsData(loadedTeams);
+      setAvailablePools([...new Set(loadedTeams.map(team => team.pool?.trim()).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })));
     } catch (error) {
       console.error('Failed to load teams:', error);
       toast.error('Failed to load teams');
@@ -81,6 +86,21 @@ const ManageTeams = () => {
     loadTeams(categoryId);
   };
 
+  const handleFormCategoryChange = async (e) => {
+    const categoryId = Number(e.target.value);
+    setFormData(prev => ({ ...prev, category_id: categoryId, pool: '' }));
+    setCreatingPool(false);
+    try {
+      const res = await teams.get(categoryId);
+      const categoryTeams = res.data.data || [];
+      setAvailablePools([...new Set(categoryTeams.map(team => team.pool?.trim()).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })));
+    } catch (error) {
+      console.error('Failed to load saved groups:', error);
+      setAvailablePools([]);
+    }
+  };
+
   const handleLogoUpload = (file) => {
     setLogoFile(file);
   };
@@ -88,6 +108,7 @@ const ManageTeams = () => {
   const openCreateModal = () => {
     setEditingTeam(null);
     setLogoFile(null);
+    setCreatingPool(availablePools.length === 0);
     setFormData({
       category_id: selectedCategory || categoriesData[0]?.id || '',
       name: '',
@@ -101,6 +122,7 @@ const ManageTeams = () => {
   const openEditModal = (team) => {
     setEditingTeam(team);
     setLogoFile(null);
+    setCreatingPool(!team.pool);
     setFormData({
       category_id: team.category_id,
       name: team.name,
@@ -126,30 +148,19 @@ const ManageTeams = () => {
     setSubmitting(true);
     try {
       // Step 1: Create/Update team
-      const teamData = {
-        tournament_id: tournamentId,
-        category_id: formData.category_id,
-        name: formData.name.trim(),
-        pool: formData.pool || null,
-      };
-
-      let teamId;
       if (editingTeam) {
         // For update, we need to use FormData to handle logo
         const formDataToSend = new FormData();
         formDataToSend.append('tournament_id', tournamentId);
         formDataToSend.append('category_id', formData.category_id);
         formDataToSend.append('name', formData.name.trim());
-        if (formData.pool) {
-          formDataToSend.append('pool', formData.pool);
-        }
+        formDataToSend.append('pool', formData.pool.trim());
         if (logoFile) {
           formDataToSend.append('logo', logoFile);
         }
 
         // Use FormData for update
-        const res = await teams.update(editingTeam.id, formDataToSend);
-        teamId = editingTeam.id;
+        await teams.update(editingTeam.id, formDataToSend);
         toast.success('Team updated successfully');
       } else {
         // Create team with FormData
@@ -157,20 +168,18 @@ const ManageTeams = () => {
         formDataToSend.append('tournament_id', tournamentId);
         formDataToSend.append('category_id', formData.category_id);
         formDataToSend.append('name', formData.name.trim());
-        if (formData.pool) {
-          formDataToSend.append('pool', formData.pool);
-        }
+        formDataToSend.append('pool', formData.pool.trim());
         if (logoFile) {
           formDataToSend.append('logo', logoFile);
         }
 
-        const res = await teams.create(formDataToSend);
-        teamId = res.data.data.id;
+        await teams.create(formDataToSend);
         toast.success('Team created successfully');
       }
 
       setIsModalOpen(false);
-      loadTeams(selectedCategory);
+      setSelectedCategory(Number(formData.category_id));
+      loadTeams(Number(formData.category_id));
     } catch (error) {
       console.error('Failed to save team:', error);
       toast.error(error.response?.data?.error || 'Failed to save team');
@@ -196,6 +205,16 @@ const ManageTeams = () => {
     team.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (team.pool && team.pool.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+  const teamsByPool = filteredTeams.reduce((groups, team) => {
+    const pool = team.pool?.trim() || 'Unassigned';
+    groups[pool] = [...(groups[pool] || []), team];
+    return groups;
+  }, {});
+  const poolNames = Object.keys(teamsByPool).sort((a, b) => {
+    if (a === 'Unassigned') return 1;
+    if (b === 'Unassigned') return -1;
+    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+  });
 
   if (tournamentLoading || loading) return <Loading />;
 
@@ -290,7 +309,14 @@ const ManageTeams = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredTeams.map((team) => (
+                  {poolNames.map((poolName) => (
+                    <React.Fragment key={poolName}>
+                      <tr className="bg-blue-50/70">
+                        <th colSpan="4" className="px-4 py-2 text-left text-sm font-semibold text-blue-900">
+                          {poolName} <span className="font-normal text-blue-700">({teamsByPool[poolName].length} teams)</span>
+                        </th>
+                      </tr>
+                      {teamsByPool[poolName].map((team) => (
                     <tr key={team.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center space-x-3">
@@ -346,6 +372,8 @@ const ManageTeams = () => {
                         </div>
                       </td>
                     </tr>
+                      ))}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
@@ -375,7 +403,7 @@ const ManageTeams = () => {
               </label>
               <select
                 value={formData.category_id}
-                onChange={(e) => setFormData({ ...formData, category_id: Number(e.target.value) })}
+                onChange={handleFormCategoryChange}
                 className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
                   formErrors.category_id ? 'border-red-500' : 'border-gray-300'
                 }`}
@@ -424,14 +452,41 @@ const ManageTeams = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Pool / Group
-              </label>
-              <Input
-                value={formData.pool}
-                onChange={(e) => setFormData({ ...formData, pool: e.target.value })}
-                placeholder="e.g., Group A, Pool 1"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Pool / Group</label>
+              {creatingPool ? (
+                <div className="space-y-2">
+                  <Input
+                    value={formData.pool}
+                    onChange={(e) => setFormData({ ...formData, pool: e.target.value })}
+                    placeholder="Enter a new group, e.g. Pool 1"
+                  />
+                  {availablePools.length > 0 && (
+                    <button type="button" className="text-sm text-blue-700 hover:underline" onClick={() => {
+                      setCreatingPool(false);
+                      setFormData({ ...formData, pool: '' });
+                    }}>
+                      Choose a saved group
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <select
+                  value={formData.pool}
+                  onChange={(e) => {
+                    if (e.target.value === '__create_group__') {
+                      setCreatingPool(true);
+                      setFormData({ ...formData, pool: '' });
+                    } else {
+                      setFormData({ ...formData, pool: e.target.value });
+                    }
+                  }}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">No group</option>
+                  {availablePools.map((pool) => <option key={pool} value={pool}>{pool}</option>)}
+                  <option value="__create_group__">Create a new group...</option>
+                </select>
+              )}
             </div>
           </div>
 

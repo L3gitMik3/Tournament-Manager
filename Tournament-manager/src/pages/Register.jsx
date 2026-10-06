@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import Button from '../components/ui/Button';
@@ -6,11 +6,10 @@ import Input from '../components/ui/Input';
 import Card from '../components/ui/Card';
 import { Trophy, UserPlus, Mail, Lock, User, Phone, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'react-toastify';
-import api from '../api/axios';
 
 const Register = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { register } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -21,13 +20,6 @@ const Register = () => {
     phone: '',
   });
   const [formErrors, setFormErrors] = useState({});
-
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/my-tournaments');
-    }
-  }, [isAuthenticated, navigate]);
 
   const validateForm = () => {
     const errors = {};
@@ -79,26 +71,26 @@ const Register = () => {
 
     setLoading(true);
     try {
-      const response = await api.post('/api/auth/signup', {
+      const result = await register({
         name: formData.name.trim(),
         email: formData.email.trim(),
         password: formData.password,
         phone: formData.phone.trim() || '',
       });
 
-      if (response.data.success) {
-        toast.success('Account created successfully! Please login.');
-        navigate('/login');
+      if (result.success) {
+        toast.success('Account created successfully');
+        navigate('/my-tournaments');
+      } else {
+        const errorMsg = result.error || 'Registration failed. Please try again.';
+        toast.error(errorMsg);
+        if (errorMsg.includes('Email already registered')) {
+          setFormErrors(prev => ({ ...prev, email: 'Email already registered' }));
+        }
       }
     } catch (error) {
       console.error('Registration failed:', error);
-      const errorMsg = error.response?.data?.error || 'Registration failed. Please try again.';
-      toast.error(errorMsg);
-      
-      // If email already exists, highlight the field
-      if (errorMsg.includes('Email already registered')) {
-        setFormErrors(prev => ({ ...prev, email: 'Email already registered' }));
-      }
+      toast.error('Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }

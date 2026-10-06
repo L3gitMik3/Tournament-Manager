@@ -5,15 +5,15 @@ import { tournaments } from '../api/axios';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Loading from '../components/common/Loading';
-import { Plus, Trophy, ExternalLink, Trash2, Edit, Share2 } from 'lucide-react';
-import { getStatusColor, getStatusLabel, getShareUrl, copyToClipboard } from '../utils/helpers';
+import { Plus, Trophy, ExternalLink, Trash2, Edit, Share2, LogOut } from 'lucide-react';
+import { getStatusColor, getStatusLabel, getShareUrl, copyToClipboard, getImageUrl } from '../utils/helpers';
 import { toast } from 'react-toastify';
 
 const MyTournaments = () => {
   const [tournamentsList, setTournamentsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -70,6 +70,11 @@ const MyTournaments = () => {
     toast.success('Link copied to clipboard!');
   };
 
+  const handleAccountSwitch = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
+
   if (loading) return <Loading fullScreen />;
 
   return (
@@ -83,12 +88,18 @@ const MyTournaments = () => {
               Create and manage your tournaments
             </p>
           </div>
-          <Link to="/create-tournament">
-            <Button>
-              <Plus size={18} className="mr-2" />
-              Create Tournament
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleAccountSwitch}>
+              <LogOut size={18} className="mr-2" />
+              Switch Account
             </Button>
-          </Link>
+            <Link to="/create-tournament">
+              <Button>
+                <Plus size={18} className="mr-2" />
+                Create Tournament
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {error && (
@@ -125,6 +136,20 @@ const MyTournaments = () => {
                   key={tournament.id}
                   className="hover:shadow-lg transition-shadow"
                 >
+                  <div className="mb-4 flex h-32 items-center justify-center overflow-hidden rounded-md bg-gray-50">
+                    {tournament.logo_url ? (
+                      <img
+                        src={getImageUrl(tournament.logo_url, 'tournaments')}
+                        alt={`${tournament.name} logo`}
+                        className="h-full w-full object-contain p-3"
+                        onError={(event) => {
+                          event.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <Trophy className="h-12 w-12 text-gray-300" aria-hidden="true" />
+                    )}
+                  </div>
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1 min-w-0">
                       <h3 className="text-xl font-semibold text-gray-900 truncate">

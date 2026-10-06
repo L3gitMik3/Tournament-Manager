@@ -8,31 +8,43 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('access_token'));
   const [user, setUser] = useState(null);  // ✅ Added user state
 
+  const establishSession = (sessionData) => {
+    const { access_token: accessToken, ...userData } = sessionData || {};
+    if (!accessToken) return false;
+
+    localStorage.setItem('access_token', accessToken);
+    setToken(accessToken);
+    setUser(userData);
+    return true;
+  };
+
   const login = async (email, password) => {
     try {
-      // ✅ Only ONE call
       const res = await auth.login({ email, password });
-      
-      // ✅ Check response structure correctly
-      if (res.data.success && res.data.data.access_token) {
-        const { access_token, ...userData } = res.data.data;
-        
-        // ✅ Store token in localStorage and state
-        localStorage.setItem('access_token', access_token);
-        setToken(access_token);
-        
-        // ✅ Store user data
-        setUser(userData);
-        
+      if (res.data.success && establishSession(res.data.data)) {
         return { success: true };
       }
-      
       return { success: false, error: 'Login failed' };
     } catch (error) {
       // ✅ Handle errors properly
       return { 
         success: false, 
         error: error.response?.data?.error || 'Invalid credentials' 
+      };
+    }
+  };
+
+  const register = async (data) => {
+    try {
+      const res = await auth.signup(data);
+      if (res.data.success && establishSession(res.data.data)) {
+        return { success: true };
+      }
+      return { success: false, error: 'Registration failed' };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Registration failed',
       };
     }
   };
@@ -50,6 +62,7 @@ export const AuthProvider = ({ children }) => {
         user,  // ✅ Added user to context
         isAuthenticated: !!token, 
         login, 
+        register,
         logout 
       }}
     >

@@ -23,9 +23,8 @@ const Gallery = () => {
   const loadGallery = async () => {
     setLoading(true);
     try {
-      // ✅ Pass tournament name to filter images for this tournament
       const res = await gallery.get({
-        tournament: tournament?.name || 'Kaizen Cup 2026',
+        tournament_id: tournamentId,
       });
       setGalleryData(res.data.data || []);
     } catch (error) {

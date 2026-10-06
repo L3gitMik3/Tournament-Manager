@@ -1,6 +1,6 @@
 // src/context/TournamentContext.jsx
-import React, { createContext, useState, useEffect, useContext } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
+import { useParams, useLocation } from 'react-router-dom';
 import { tournaments } from '../api/axios';
 import { toast } from 'react-toastify';
 
@@ -19,27 +19,34 @@ export const useTournament = () => {
 // Provider
 export const TournamentProvider = ({ children }) => {
   const { tournamentId } = useParams();
-  const navigate = useNavigate();
+  const location = useLocation();
+  const isAdminRoute = location.pathname.includes('/admin');
+  const requestVersion = useRef(0);
   const [tournament, setTournament] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     if (tournamentId) {
-      loadTournament(tournamentId);
+      loadTournament(tournamentId, isAdminRoute);
     } else {
+      requestVersion.current += 1;
+      setTournament(null);
       setLoading(false);
       setError('No tournament ID provided');
     }
-  }, [tournamentId]);
+  }, [tournamentId, isAdminRoute]);
 
-  const loadTournament = async (id) => {
+  const loadTournament = async (id, requireOwnership = isAdminRoute) => {
+    const currentRequest = ++requestVersion.current;
     setLoading(true);
     setError(null);
+    setTournament(null);
     try {
-      console.log(`🔍 Loading tournament ${id}...`);
-      const response = await tournaments.get(id);
-      console.log('✅ Tournament response:', response.data);
+      const response = requireOwnership
+        ? await tournaments.getForManagement(id)
+        : await tournaments.get(id);
+      if (currentRequest !== requestVersion.current) return;
       
       // Handle different response formats
       let tournamentData = null;
@@ -51,14 +58,14 @@ export const TournamentProvider = ({ children }) => {
       
       if (tournamentData && tournamentData.id) {
         setTournament(tournamentData);
-        console.log('✅ Tournament loaded:', tournamentData.name);
       } else {
         setError('Tournament not found');
+        setTournament(null);
         toast.error('Tournament not found');
-        setTimeout(() => navigate('/my-tournaments'), 1500);
       }
     } catch (err) {
-      console.error('❌ Failed to load tournament:', err);
+      if (currentRequest !== requestVersion.current) return;
+      setTournament(null);
       // Check if it's a 404
       if (err.response && err.response.status === 404) {
         setError('Tournament not found');
@@ -67,15 +74,16 @@ export const TournamentProvider = ({ children }) => {
         setError('Failed to load tournament');
         toast.error('Failed to load tournament');
       }
-      setTimeout(() => navigate('/my-tournaments'), 1500);
     } finally {
-      setLoading(false);
+      if (currentRequest === requestVersion.current) {
+        setLoading(false);
+      }
     }
   };
 
   const refreshTournament = () => {
     if (tournamentId) {
-      loadTournament(tournamentId);
+      loadTournament(tournamentId, isAdminRoute);
     }
   };
 

@@ -29,6 +29,7 @@ import ManageTeams from './pages/ManageTeams';
 import ManageCategories from './pages/ManageCategories';
 import ManageGallery from './pages/ManageGallery';
 import Settings from './pages/Settings';
+import AdminGuide from './pages/AdminGuide';
 
 function App() {
   return (
@@ -165,6 +166,16 @@ function App() {
             <TournamentProvider>
               <AdminLayout>
                 <Settings />
+              </AdminLayout>
+            </TournamentProvider>
+          }
+        />
+        <Route
+          path="/t/:tournamentId/admin/guide"
+          element={
+            <TournamentProvider>
+              <AdminLayout>
+                <AdminGuide />
               </AdminLayout>
             </TournamentProvider>
           }

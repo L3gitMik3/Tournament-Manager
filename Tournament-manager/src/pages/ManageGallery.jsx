@@ -37,7 +37,7 @@ const ManageGallery = () => {
   const loadGallery = async () => {
     setLoading(true);
     try {
-      const res = await gallery.get();
+      const res = await gallery.get({ tournament_id: tournamentId });
       setGalleryData(res.data.data || []);
     } catch (error) {
       console.error('Failed to load gallery:', error);
@@ -78,7 +78,7 @@ const ManageGallery = () => {
     setSubmitting(true);
     try {
       const payload = new FormData();
-      payload.append('tournament_name', tournament?.name || 'Kaizen Cup 2026');
+      payload.append('tournament_id', tournamentId);
       payload.append('image_title', formData.image_title.trim());
       payload.append('category', formData.category);
       payload.append('display_order', String(formData.display_order || 0));

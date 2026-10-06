@@ -18,10 +18,12 @@ const ManageMatches = () => {
   const [matchesData, setMatchesData] = useState([]);
   const [categoriesData, setCategoriesData] = useState([]);
   const [teamsData, setTeamsData] = useState([]);
+  const [progressionMatches, setProgressionMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [generatingFixtures, setGeneratingFixtures] = useState(false);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -69,7 +71,10 @@ const ManageMatches = () => {
       if (categoriesRes.data.data && categoriesRes.data.data.length > 0) {
         const firstCategory = categoriesRes.data.data[0];
         setSelectedCategory(firstCategory.id);
-        await loadMatches(firstCategory.id);
+        await Promise.all([
+          loadMatches(firstCategory.id),
+          loadProgressionMatches(firstCategory.id),
+        ]);
       }
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -100,10 +105,56 @@ const ManageMatches = () => {
     }
   };
 
+  const loadProgressionMatches = async (categoryId) => {
+    try {
+      const res = await matches.get({ category_id: categoryId, tournament_id: tournamentId });
+      setProgressionMatches(res.data.data || []);
+    } catch (error) {
+      console.error('Failed to load progression matches:', error);
+      setProgressionMatches([]);
+    }
+  };
+
   const handleCategoryChange = (e) => {
     const categoryId = Number(e.target.value);
     setSelectedCategory(categoryId);
     loadMatches(categoryId);
+    loadProgressionMatches(categoryId);
+  };
+
+  const getTeamPool = (teamId) => teamsData.find(team => String(team.id) === String(teamId))?.pool?.trim() || '';
+  const getSelectedPool = (teamOneId, teamTwoId) => {
+    const teamOnePool = getTeamPool(teamOneId);
+    const teamTwoPool = getTeamPool(teamTwoId);
+    if (teamOneId && teamTwoId) {
+      return teamOnePool.toLocaleLowerCase() === teamTwoPool.toLocaleLowerCase() ? teamOnePool : '';
+    }
+    return teamOnePool || teamTwoPool;
+  };
+
+  const handleTeamSelection = (field, value) => {
+    const selectedId = value ? Number(value) : '';
+    const teamOneId = field === 'team_1_id' ? selectedId : formData.team_1_id;
+    const teamTwoId = field === 'team_2_id' ? selectedId : formData.team_2_id;
+    setFormData(prev => ({
+      ...prev,
+      [field]: selectedId,
+      pool: getSelectedPool(teamOneId, teamTwoId),
+    }));
+  };
+
+  const handleProgressionTargetChange = (value) => {
+    const target = progressionMatches.find(match => String(match.id) === value);
+    const openSlots = target ? ['team_1', 'team_2'].filter(slot => !target[`${slot}_id`]) : [];
+    setFormData(prev => ({
+      ...prev,
+      next_match_id: value,
+      next_team_slot: value === String(prev.next_match_id) && openSlots.includes(prev.next_team_slot)
+        ? prev.next_team_slot
+        : openSlots.includes(prev.next_team_slot)
+          ? prev.next_team_slot
+          : openSlots.length === 1 ? openSlots[0] : '',
+    }));
   };
 
   const handleStatusChange = (e) => {
@@ -113,6 +164,24 @@ const ManageMatches = () => {
       const params = { category_id: selectedCategory, tournament_id: tournamentId };
       if (status) params.status = status;
       matches.get(params).then(res => setMatchesData(res.data.data || []));
+    }
+  };
+
+  const generateGroupFixtures = async () => {
+    if (!selectedCategory || !window.confirm('Generate any missing round-robin matches for the selected category and pools?')) return;
+    setGeneratingFixtures(true);
+    try {
+      const response = await categories.generateGroupStage(selectedCategory);
+      const created = response.data.data?.created || 0;
+      toast.success(created ? `${created} group-stage match${created === 1 ? '' : 'es'} generated` : 'All pool fixtures are already scheduled');
+      await Promise.all([
+        loadMatches(selectedCategory),
+        loadProgressionMatches(selectedCategory),
+      ]);
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to generate group fixtures');
+    } finally {
+      setGeneratingFixtures(false);
     }
   };
 
@@ -136,7 +205,9 @@ const ManageMatches = () => {
     });
     setFormErrors({});
     setIsModalOpen(true);
-    loadTeamsForCategory(selectedCategory || categoriesData[0]?.id);
+    const categoryId = selectedCategory || categoriesData[0]?.id;
+    loadTeamsForCategory(categoryId);
+    loadProgressionMatches(categoryId);
   };
 
   const openEditModal = (match) => {
@@ -157,6 +228,7 @@ const ManageMatches = () => {
     setFormErrors({});
     setIsModalOpen(true);
     loadTeamsForCategory(match.category_id);
+    loadProgressionMatches(match.category_id);
   };
 
   const openScoreModal = (match) => {
@@ -171,11 +243,20 @@ const ManageMatches = () => {
   const validateForm = () => {
     const errors = {};
     if (!formData.category_id) errors.category_id = 'Category is required';
-    if (!formData.team_1_id) errors.team_1_id = 'Team 1 is required';
-    if (!formData.team_2_id) errors.team_2_id = 'Team 2 is required';
-    if (formData.team_1_id === formData.team_2_id) errors.team_2_id = 'Teams must be different';
+    if (formData.round === 'Group Stage' && !formData.team_1_id) errors.team_1_id = 'Team 1 is required for a group-stage match';
+    if (formData.round === 'Group Stage' && !formData.team_2_id) errors.team_2_id = 'Team 2 is required for a group-stage match';
+    if (formData.team_1_id && formData.team_2_id && formData.team_1_id === formData.team_2_id) {
+      errors.team_2_id = 'Teams must be different';
+    }
+    const teamOnePool = getTeamPool(formData.team_1_id).toLocaleLowerCase();
+    const teamTwoPool = getTeamPool(formData.team_2_id).toLocaleLowerCase();
+    if (formData.round === 'Group Stage' && formData.team_1_id && formData.team_2_id && teamOnePool !== teamTwoPool) {
+      errors.team_2_id = 'Group-stage teams must belong to the same pool';
+    }
     if (!formData.match_time) errors.match_time = 'Match time is required';
     if (!formData.venue) errors.venue = 'Venue is required';
+    if (formData.next_match_id && !formData.next_team_slot) errors.next_team_slot = 'Choose the winner destination slot';
+    if (!formData.next_match_id && formData.next_team_slot) errors.next_match_id = 'Choose a next match or clear the winner slot';
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -191,7 +272,6 @@ const ManageMatches = () => {
         category_id: formData.category_id,
         team_1_id: formData.team_1_id,
         team_2_id: formData.team_2_id,
-        pool: formData.pool || null,
         round: formData.round || 'Group Stage',
         next_match_id: formData.next_match_id || null,
         next_team_slot: formData.next_team_slot || null,
@@ -208,7 +288,10 @@ const ManageMatches = () => {
       }
 
       setIsModalOpen(false);
-      loadMatches(selectedCategory);
+      const categoryId = Number(formData.category_id);
+      setSelectedCategory(categoryId);
+      loadMatches(categoryId);
+      loadProgressionMatches(categoryId);
     } catch (error) {
       console.error('Failed to save match:', error);
       toast.error(error.response?.data?.error || 'Failed to save match');
@@ -232,6 +315,7 @@ const ManageMatches = () => {
       toast.success('Match completed successfully');
       setIsScoreModalOpen(false);
       loadMatches(selectedCategory);
+      loadProgressionMatches(selectedCategory);
     } catch (error) {
       console.error('Failed to complete match:', error);
       toast.error(error.response?.data?.error || 'Failed to complete match');
@@ -246,6 +330,7 @@ const ManageMatches = () => {
       await matches.delete(match.id);
       toast.success('Match deleted successfully');
       loadMatches(selectedCategory);
+      loadProgressionMatches(selectedCategory);
     } catch (error) {
       console.error('Failed to delete match:', error);
       toast.error('Failed to delete match');
@@ -260,6 +345,24 @@ const ManageMatches = () => {
            match.venue?.toLowerCase().includes(search);
   });
 
+  const teamsByPool = teamsData.reduce((groups, team) => {
+    const pool = team.pool?.trim() || 'Unassigned';
+    groups[pool] = [...(groups[pool] || []), team];
+    return groups;
+  }, {});
+  const teamPoolNames = Object.keys(teamsByPool).sort((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+  );
+  const progressionTargets = progressionMatches.filter(match =>
+    match.id !== editingMatch?.id &&
+    match.status !== 'completed' &&
+    (!match.team_1_id || !match.team_2_id || match.id === Number(formData.next_match_id))
+  );
+  const selectedTeamOne = teamsData.find(team => String(team.id) === String(formData.team_1_id));
+  const selectedTeamTwo = teamsData.find(team => String(team.id) === String(formData.team_2_id));
+  const teamsFromDifferentPools = selectedTeamOne && selectedTeamTwo &&
+    (selectedTeamOne.pool || '').trim().toLocaleLowerCase() !== (selectedTeamTwo.pool || '').trim().toLocaleLowerCase();
+
   if (tournamentLoading || loading) return <Loading />;
 
   return (
@@ -273,10 +376,16 @@ const ManageMatches = () => {
               {tournament?.name} - Schedule, update, and score matches
             </p>
           </div>
-          <Button onClick={openCreateModal}>
-            <Plus size={18} className="mr-2" />
-            Create Match
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={generateGroupFixtures} disabled={!selectedCategory || generatingFixtures}>
+              <Calendar size={18} className="mr-2" />
+              {generatingFixtures ? 'Generating...' : 'Generate Group Fixtures'}
+            </Button>
+            <Button onClick={openCreateModal}>
+              <Plus size={18} className="mr-2" />
+              Create Match
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -367,7 +476,7 @@ const ManageMatches = () => {
                               onError={(e) => { e.target.style.display = 'none'; }}
                             />
                           )}
-                          <span className="font-medium">#{match.id} · {match.team_1_name}</span>
+                          <span className="font-medium">#{match.id} · {match.team_1_name || 'TBD'}</span>
                           <span className="text-gray-400 text-sm">vs</span>
                           {match.team_2_logo && (
                             <img
@@ -377,7 +486,7 @@ const ManageMatches = () => {
                               onError={(e) => { e.target.style.display = 'none'; }}
                             />
                           )}
-                          <span className="font-medium">{match.team_2_name}</span>
+                          <span className="font-medium">{match.team_2_name || 'TBD'}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -465,8 +574,18 @@ const ManageMatches = () => {
                 value={formData.category_id}
                 onChange={(e) => {
                   const id = Number(e.target.value);
-                  setFormData({ ...formData, category_id: id });
-                  loadTeamsForCategory(id);
+                  setSelectedCategory(id);
+                  setFormData(prev => ({
+                    ...prev,
+                    category_id: id,
+                    team_1_id: '',
+                    team_2_id: '',
+                    pool: '',
+                    next_match_id: '',
+                    next_team_slot: '',
+                  }));
+                  loadMatches(id);
+                  loadProgressionMatches(id);
                 }}
                 className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
                   formErrors.category_id ? 'border-red-500' : 'border-gray-300'
@@ -484,7 +603,7 @@ const ManageMatches = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">Round</label>
               <select
                 value={formData.round}
-                onChange={(e) => setFormData({ ...formData, round: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, round: e.target.value }))}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="Group Stage">Group Stage</option>
@@ -499,76 +618,104 @@ const ManageMatches = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">Next Match</label>
               <select
                 value={formData.next_match_id}
-                onChange={(e) => setFormData({ ...formData, next_match_id: e.target.value })}
+                onChange={(e) => handleProgressionTargetChange(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">No progression</option>
-                {matchesData
-                  .filter((match) => match.id !== editingMatch?.id)
-                  .map((match) => (
+                <option value="">{progressionTargets.length ? 'No progression' : 'No open target matches'}</option>
+                {progressionTargets.map((match) => (
                     <option key={match.id} value={match.id}>
-                      Match #{match.id} · {match.round || 'Group Stage'} · {match.team_1_name} vs {match.team_2_name}
+                      Match #{match.id} · {match.round || 'Group Stage'} · {match.team_1_name || 'Open'} vs {match.team_2_name || 'Open'}
                     </option>
-                  ))}
+                ))}
               </select>
-              <p className="mt-1 text-xs text-gray-500">Select the match this winner should enter.</p>
+              <p className="mt-1 text-xs text-gray-500">
+                {progressionTargets.length
+                  ? 'Choose the next match the winner advances into.'
+                  : 'Create a knockout match with an open team slot, then select it here.'}
+              </p>
+              {formErrors.next_match_id && <p className="mt-1 text-sm text-red-600">{formErrors.next_match_id}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Winner Slot</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Winner enters as</label>
               <select
                 value={formData.next_team_slot}
                 onChange={(e) => setFormData({ ...formData, next_team_slot: e.target.value })}
                 className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">No progression</option>
-                <option value="team_1">Next match: Team 1</option>
-                <option value="team_2">Next match: Team 2</option>
+                <option value="">Select destination slot</option>
+                {['team_1', 'team_2'].map((slot) => {
+                  const target = progressionTargets.find(match => String(match.id) === String(formData.next_match_id));
+                  const occupied = target?.[`${slot}_id`] && formData.next_team_slot !== slot;
+                  return (
+                    <option key={slot} value={slot} disabled={occupied}>
+                      {slot === 'team_1' ? 'Team 1 slot' : 'Team 2 slot'}{occupied ? ' (occupied)' : ''}
+                    </option>
+                  );
+                })}
               </select>
-              <p className="mt-1 text-xs text-gray-500">Choose the slot in the next match.</p>
+              <p className="mt-1 text-xs text-gray-500">
+                {formData.next_match_id ? 'The winner is placed in this open slot.' : 'Select a next match before choosing a slot.'}
+              </p>
+              {formErrors.next_team_slot && <p className="mt-1 text-sm text-red-600">{formErrors.next_team_slot}</p>}
+              <p className="mt-2 rounded bg-gray-50 px-3 py-2 text-xs text-gray-600" role="status">
+                {formData.next_match_id
+                  ? formData.next_team_slot
+                    ? `Winner advances to Match #${formData.next_match_id} as ${formData.next_team_slot === 'team_1' ? 'Team 1' : 'Team 2'}.`
+                    : 'Select the open slot where the winner will advance.'
+                  : 'No winner progression is configured for this match.'}
+              </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Team 1 *</label>
-              <select
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Team 1 {formData.round === 'Group Stage' ? '*' : '(optional slot)'}
+              </label>
+                <select
                 value={formData.team_1_id}
-                onChange={(e) => setFormData({ ...formData, team_1_id: Number(e.target.value) })}
+                  onChange={(e) => handleTeamSelection('team_1_id', e.target.value)}
                 className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
                   formErrors.team_1_id ? 'border-red-500' : 'border-gray-300'
                 }`}
               >
-                <option value="">Select Team</option>
-                {teamsData.map((team) => (
-                  <option key={team.id} value={team.id}>{team.name}</option>
-                ))}
+                  <option value="">{formData.round === 'Group Stage' ? 'Select Team' : 'Leave slot open (winner can advance here)'}</option>
+                  {teamPoolNames.map((pool) => (
+                    <optgroup key={pool} label={pool}>
+                      {teamsByPool[pool].map(team => <option key={team.id} value={team.id}>{team.name}</option>)}
+                    </optgroup>
+                  ))}
               </select>
               {formErrors.team_1_id && <p className="mt-1 text-sm text-red-600">{formErrors.team_1_id}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Team 2 *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Team 2 {formData.round === 'Group Stage' ? '*' : '(optional slot)'}
+              </label>
               <select
                 value={formData.team_2_id}
-                onChange={(e) => setFormData({ ...formData, team_2_id: Number(e.target.value) })}
+                onChange={(e) => handleTeamSelection('team_2_id', e.target.value)}
                 className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
                   formErrors.team_2_id ? 'border-red-500' : 'border-gray-300'
                 }`}
               >
-                <option value="">Select Team</option>
-                {teamsData.map((team) => (
-                  <option key={team.id} value={team.id}>{team.name}</option>
-                ))}
+                  <option value="">{formData.round === 'Group Stage' ? 'Select Team' : 'Leave slot open (winner can advance here)'}</option>
+                  {teamPoolNames.map((pool) => (
+                    <optgroup key={pool} label={pool}>
+                      {teamsByPool[pool].map(team => <option key={team.id} value={team.id}>{team.name}</option>)}
+                    </optgroup>
+                  ))}
               </select>
               {formErrors.team_2_id && <p className="mt-1 text-sm text-red-600">{formErrors.team_2_id}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Pool / Group</label>
-              <Input
-                value={formData.pool}
-                onChange={(e) => setFormData({ ...formData, pool: e.target.value })}
-                placeholder="e.g., Group A"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Match Pool / Group</label>
+              <div className={`rounded-lg border px-4 py-2 text-sm ${teamsFromDifferentPools && formData.round === 'Group Stage' ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-200 bg-gray-50 text-gray-700'}`}>
+                {teamsFromDifferentPools
+                  ? formData.round === 'Group Stage' ? 'Teams must be from the same pool' : 'Cross-pool knockout match'
+                  : formData.pool || 'Automatically assigned from selected teams'}
+              </div>
             </div>
 
             <div>

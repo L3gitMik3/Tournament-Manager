@@ -81,6 +81,7 @@ const AdminLayout = ({ children }) => {
   { label: 'Categories', path: `/t/${tournamentId}/admin/categories` },
   { label: 'Gallery', path: `/t/${tournamentId}/admin/gallery` },
   { label: 'Settings', path: `/t/${tournamentId}/admin/settings` },
+  { label: 'Getting Started', path: `/t/${tournamentId}/admin/guide` },
 ];
 
   return (

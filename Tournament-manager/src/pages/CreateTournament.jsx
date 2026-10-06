@@ -12,7 +12,7 @@ import { toast } from 'react-toastify';
 
 const CreateTournament = () => {
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoFile, setLogoFile] = useState(null);
@@ -66,8 +66,6 @@ const CreateTournament = () => {
       formDataToSend.append('name', formData.name.trim());
       formDataToSend.append('slogan', formData.slogan?.trim() || '');
       formDataToSend.append('season', formData.season);
-      formDataToSend.append('created_by', user?.id || 1);
-
       const res = await tournaments.create(formDataToSend);
       
       if (res.data.success) {

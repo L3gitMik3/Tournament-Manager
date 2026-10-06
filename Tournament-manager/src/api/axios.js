@@ -35,6 +35,7 @@ api.interceptors.response.use(
 // ============================================
 
 export const auth = {
+  signup: (data) => api.post('/api/auth/signup', data),
   login: (data) => api.post('/api/auth/signin', data),
   adminLogin: (password) => api.post('/api/admin/login', { password }),
 };
@@ -42,6 +43,7 @@ export const auth = {
 export const tournaments = {
   getAll: () => api.get('/api/tournaments'),
   get: (id) => api.get(`/api/tournaments/${id}`),
+  getForManagement: (id) => api.get(`/api/tournaments/${id}/manage`),
   create: (data) => api.post('/api/tournaments', data, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
@@ -53,6 +55,7 @@ export const tournaments = {
 
 export const categories = {
   get: (tournamentId) => api.get(`/api/categories/${tournamentId}`),
+  generateGroupStage: (categoryId) => api.post(`/api/categories/${categoryId}/group-stage/generate`),
   getBracket: (categoryId) => api.get(`/api/categories/${categoryId}/bracket`),
   generateBracket: (categoryId, qualifiersPerPool = 2) => api.post(`/api/categories/${categoryId}/bracket/generate`, {
     qualifiers_per_pool: qualifiersPerPool,
@@ -74,8 +77,8 @@ export const teams = {
 
 export const matches = {
   get: (params) => api.get('/api/matches', { params }),
-  getToday: () => api.get('/api/matches/today'),
-  getOne: (id) => api.get(`/api/matches/${id}`),
+  getToday: (tournamentId) => api.get('/api/matches/today', { params: { tournament_id: tournamentId } }),
+  getOne: (id, tournamentId) => api.get(`/api/matches/${id}`, { params: { tournament_id: tournamentId } }),
   create: (data) => api.post('/api/matches', data),
   update: (id, data) => api.put(`/api/matches/${id}`, data),
   complete: (id, scores) => api.post(`/api/matches/${id}/complete`, scores),

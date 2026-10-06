@@ -208,7 +208,7 @@ const Matches = () => {
                           onError={(e) => (e.target.style.display = 'none')}
                         />
                       )}
-                      <span className="text-lg font-semibold">{match.team_1_name}</span>
+                      <span className="text-lg font-semibold">{match.team_1_name || 'TBD'}</span>
                     </div>
                   </div>
 
@@ -238,7 +238,7 @@ const Matches = () => {
 
                   <div className="flex-1 text-left">
                     <div className="flex items-center space-x-3">
-                      <span className="text-lg font-semibold">{match.team_2_name}</span>
+                      <span className="text-lg font-semibold">{match.team_2_name || 'TBD'}</span>
                       {match.team_2_logo && (
                         <img
                           src={getImageUrl(match.team_2_logo, 'teams')}

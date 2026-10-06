@@ -12,11 +12,17 @@ const MatchCard = ({ match }) => (
       <span className={match.status === 'completed' ? 'text-emerald-600' : 'text-amber-600'}>{match.status}</span>
     </div>
     <div className={`flex items-center justify-between border-b border-slate-100 py-2 ${match.winner_id === match.team_1_id ? 'font-bold text-[#113c3a]' : 'text-slate-600'}`}>
-      <span>{match.team_1_name || 'TBD'}</span>
+      <span className="flex items-center gap-2">
+        {match.team_1_seed && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{match.team_1_seed}</span>}
+        {match.team_1_name || 'TBD'}
+      </span>
       <span>{match.status === 'completed' ? match.team_1_score : '-'}</span>
     </div>
     <div className={`flex items-center justify-between py-2 ${match.winner_id === match.team_2_id ? 'font-bold text-[#113c3a]' : 'text-slate-600'}`}>
-      <span>{match.team_2_name || 'TBD'}</span>
+      <span className="flex items-center gap-2">
+        {match.team_2_seed && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{match.team_2_seed}</span>}
+        {match.team_2_name || 'TBD'}
+      </span>
       <span>{match.status === 'completed' ? match.team_2_score : '-'}</span>
     </div>
     {match.venue && <p className="mt-3 text-xs text-slate-400">{match.venue}</p>}
@@ -98,7 +104,17 @@ const Bracket = ({ admin = false }) => {
   if (tournamentLoading || loading) return <Loading />;
 
   const rounds = bracket?.rounds || {};
-  const roundEntries = Object.entries(rounds);
+  const roundOrder = ['Round of 128', 'Round of 64', 'Round of 32', 'Round of 16', 'Quarter-final', 'Semi-final', '3rd Place', 'Final'];
+  const roundEntries = Object.entries(rounds).sort(([left], [right]) => {
+    const leftIndex = roundOrder.indexOf(left);
+    const rightIndex = roundOrder.indexOf(right);
+    if (leftIndex >= 0 || rightIndex >= 0) {
+      return (leftIndex < 0 ? roundOrder.length : leftIndex) - (rightIndex < 0 ? roundOrder.length : rightIndex);
+    }
+    const leftSize = Number(left.match(/Round of (\d+)/)?.[1] || 0);
+    const rightSize = Number(right.match(/Round of (\d+)/)?.[1] || 0);
+    return rightSize - leftSize || left.localeCompare(right);
+  });
 
   return (
     <div className="min-h-screen bg-[#f7f8f5] px-5 py-10 text-[#18302f] lg:px-8">

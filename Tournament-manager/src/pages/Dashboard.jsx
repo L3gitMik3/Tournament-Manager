@@ -24,6 +24,7 @@ const Dashboard = () => {
     ongoing_matches: 0,
   });
   const [recentMatches, setRecentMatches] = useState([]);
+  const [teamGroups, setTeamGroups] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,6 +39,7 @@ const Dashboard = () => {
       const statsRes = await tournaments.getStats(tournamentId);
       if (statsRes.data.success) {
         setStats(statsRes.data.data);
+        setTeamGroups(statsRes.data.data.teams_by_group || []);
       }
 
       const matchesRes = await matches.get({ 
@@ -90,6 +92,10 @@ const Dashboard = () => {
     { label: 'Add Category', icon: Trophy, path: `/t/${tournamentId}/admin/categories`, color: 'bg-purple-500' },
     { label: 'Upload Photo', icon: Image, path: `/t/${tournamentId}/admin/gallery`, color: 'bg-pink-500' },
   ];
+  const sortedTeamGroups = [...teamGroups].sort((a, b) =>
+    a.category_name.localeCompare(b.category_name, undefined, { numeric: true, sensitivity: 'base' }) ||
+    a.pool.localeCompare(b.pool, undefined, { numeric: true, sensitivity: 'base' })
+  );
 
   if (tournamentLoading || loading) return <Loading />;
 
@@ -124,6 +130,40 @@ const Dashboard = () => {
             </Link>
           ))}
         </div>
+
+        <section className="mb-8" aria-labelledby="dashboard-team-groups">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 id="dashboard-team-groups" className="text-xl font-semibold text-gray-900">Teams by Pool / Group</h2>
+              <p className="mt-1 text-sm text-gray-500">Teams are arranged within their category and saved group.</p>
+            </div>
+            <Link to={`/t/${tournamentId}/admin/teams`} className="text-sm font-medium text-blue-700 hover:underline">
+              Manage teams
+            </Link>
+          </div>
+          {sortedTeamGroups.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-gray-300 bg-white px-5 py-8 text-center text-sm text-gray-500">
+              No teams have been assigned to groups yet.
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {sortedTeamGroups.map((group) => (
+                <div key={`${group.category_id}-${group.pool}`} className="rounded-lg border border-gray-200 bg-white p-4">
+                  <p className="text-xs font-medium uppercase text-gray-500">{group.category_name}</p>
+                  <div className="mt-1 flex items-center justify-between gap-3">
+                    <h3 className="font-semibold text-gray-900">{group.pool}</h3>
+                    <span className="text-xs text-gray-500">{group.teams.length} teams</span>
+                  </div>
+                  <ul className="mt-3 divide-y divide-gray-100">
+                    {group.teams.map((team) => (
+                      <li key={team.id} className="py-2 text-sm text-gray-700">{team.name}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Quick Actions */}
@@ -196,9 +236,9 @@ const Dashboard = () => {
                     <div key={match.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                       <div className="flex items-center space-x-4">
                         <div className="flex items-center space-x-2">
-                          <span className="font-medium">{match.team_1_name}</span>
+                          <span className="font-medium">{match.team_1_name || 'TBD'}</span>
                           <span className="text-gray-400 text-sm">vs</span>
-                          <span className="font-medium">{match.team_2_name}</span>
+                          <span className="font-medium">{match.team_2_name || 'TBD'}</span>
                         </div>
                         {match.status === 'completed' ? (
                           <span className="text-sm font-bold text-green-600">
