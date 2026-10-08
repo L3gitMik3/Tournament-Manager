@@ -22,10 +22,22 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // Check if the request that failed was a login or signup attempt
+    const originalUrl = error.config?.url || '';
+    const isAuthEndpoint = originalUrl.includes('/api/auth/signin') || 
+                           originalUrl.includes('/api/auth/signup') ||
+                           originalUrl.includes('/api/admin/login');
+
+    // Only force a redirect if it's a 401 AND it's NOT an auth endpoint
+    if (error.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem('access_token');
-      window.location.href = '/login';
+      
+      // Only redirect if we aren't already on the login page
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
+    
     return Promise.reject(error);
   }
 );
