@@ -4,6 +4,8 @@ import { AuthProvider } from './context/AuthContext';
 import { TournamentProvider } from './context/TournamentContext';
 import PublicLayout from './components/Layout/PublicLayout';
 import AdminLayout from './components/Layout/AdminLayout';
+import ProtectedRoute from './components/common/ProtectedRoute';
+import NotFound from './pages/NotFound';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -36,171 +38,43 @@ function App() {
     <AuthProvider>
       <ToastContainer position="top-right" autoClose={3000} />
       <Routes>
-        {/* Platform Routes */}
+        {/* Public Platform Routes */}
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/my-tournaments" element={<MyTournaments />} />
-        <Route path="/create-tournament" element={<CreateTournament />} />
+
+        {/* Protected Platform Routes */}
+        <Route element={<ProtectedRoute />}>
+          <Route path="/my-tournaments" element={<MyTournaments />} />
+          <Route path="/create-tournament" element={<CreateTournament />} />
+        </Route>
 
         {/* ============================================
-            TOURNAMENT ROUTES - Using element prop
+            TOURNAMENT ROUTES
             ============================================ */}
 
-        {/* Public Routes */}
-        <Route 
-          path="/t/:tournamentId" 
-          element={
-            <TournamentProvider>
-              <PublicLayout>
-                <Home />
-              </PublicLayout>
-            </TournamentProvider>
-          }
-        />
-        <Route
-          path="/t/:tournamentId/about"
-          element={
-            <TournamentProvider>
-              <PublicLayout>
-                <About />
-              </PublicLayout>
-            </TournamentProvider>
-          }
-        />
-        <Route 
-          path="/t/:tournamentId/matches" 
-          element={
-            <TournamentProvider>
-              <PublicLayout>
-                <Matches />
-              </PublicLayout>
-            </TournamentProvider>
-          }
-        />
-        <Route 
-          path="/t/:tournamentId/standings" 
-          element={
-            <TournamentProvider>
-              <PublicLayout>
-                <Standings />
-              </PublicLayout>
-            </TournamentProvider>
-          }
-        />
-        <Route 
-          path="/t/:tournamentId/gallery" 
-          element={
-            <TournamentProvider>
-              <PublicLayout>
-                <Gallery />
-              </PublicLayout>
-            </TournamentProvider>
-          }
-        />
-        <Route
-          path="/t/:tournamentId/bracket"
-          element={
-            <TournamentProvider>
-              <PublicLayout>
-                <Bracket />
-              </PublicLayout>
-            </TournamentProvider>
-          }
-        />
+        {/* Public Tournament Routes */}
+        <Route path="/t/:tournamentId" element={<TournamentProvider><PublicLayout><Home /></PublicLayout></TournamentProvider>} />
+        <Route path="/t/:tournamentId/about" element={<TournamentProvider><PublicLayout><About /></PublicLayout></TournamentProvider>} />
+        <Route path="/t/:tournamentId/matches" element={<TournamentProvider><PublicLayout><Matches /></PublicLayout></TournamentProvider>} />
+        <Route path="/t/:tournamentId/standings" element={<TournamentProvider><PublicLayout><Standings /></PublicLayout></TournamentProvider>} />
+        <Route path="/t/:tournamentId/gallery" element={<TournamentProvider><PublicLayout><Gallery /></PublicLayout></TournamentProvider>} />
+        <Route path="/t/:tournamentId/bracket" element={<TournamentProvider><PublicLayout><Bracket /></PublicLayout></TournamentProvider>} />
 
-        {/* Admin Routes */}
-        <Route 
-          path="/t/:tournamentId/admin" 
-          element={
-            <TournamentProvider>
-              <AdminLayout>
-                <Dashboard />
-              </AdminLayout>
-            </TournamentProvider>
-          }
-        />
-        <Route 
-          path="/t/:tournamentId/admin/matches" 
-          element={
-            <TournamentProvider>
-              <AdminLayout>
-                <ManageMatches />
-              </AdminLayout>
-            </TournamentProvider>
-          }
-        />
-        <Route 
-          path="/t/:tournamentId/admin/teams" 
-          element={
-            <TournamentProvider>
-              <AdminLayout>
-                <ManageTeams />
-              </AdminLayout>
-            </TournamentProvider>
-          }
-        />
-        <Route 
-          path="/t/:tournamentId/admin/categories" 
-          element={
-            <TournamentProvider>
-              <AdminLayout>
-                <ManageCategories />
-              </AdminLayout>
-            </TournamentProvider>
-          }
-        />
-        <Route 
-          path="/t/:tournamentId/admin/gallery" 
-          element={
-            <TournamentProvider>
-              <AdminLayout>
-                <ManageGallery />
-              </AdminLayout>
-            </TournamentProvider>
-          }
-        />
-        <Route 
-          path="/t/:tournamentId/admin/settings" 
-          element={
-            <TournamentProvider>
-              <AdminLayout>
-                <Settings />
-              </AdminLayout>
-            </TournamentProvider>
-          }
-        />
-        <Route
-          path="/t/:tournamentId/admin/guide"
-          element={
-            <TournamentProvider>
-              <AdminLayout>
-                <AdminGuide />
-              </AdminLayout>
-            </TournamentProvider>
-          }
-        />
-        <Route
-          path="/t/:tournamentId/admin/bracket"
-          element={
-            <TournamentProvider>
-              <AdminLayout>
-                <Bracket admin />
-              </AdminLayout>
-            </TournamentProvider>
-          }
-        />
+        {/* Protected Admin Tournament Routes */}
+        <Route element={<ProtectedRoute />}>
+          <Route path="/t/:tournamentId/admin" element={<TournamentProvider><AdminLayout><Dashboard /></AdminLayout></TournamentProvider>} />
+          <Route path="/t/:tournamentId/admin/matches" element={<TournamentProvider><AdminLayout><ManageMatches /></AdminLayout></TournamentProvider>} />
+          <Route path="/t/:tournamentId/admin/teams" element={<TournamentProvider><AdminLayout><ManageTeams /></AdminLayout></TournamentProvider>} />
+          <Route path="/t/:tournamentId/admin/categories" element={<TournamentProvider><AdminLayout><ManageCategories /></AdminLayout></TournamentProvider>} />
+          <Route path="/t/:tournamentId/admin/gallery" element={<TournamentProvider><AdminLayout><ManageGallery /></AdminLayout></TournamentProvider>} />
+          <Route path="/t/:tournamentId/admin/settings" element={<TournamentProvider><AdminLayout><Settings /></AdminLayout></TournamentProvider>} />
+          <Route path="/t/:tournamentId/admin/guide" element={<TournamentProvider><AdminLayout><AdminGuide /></AdminLayout></TournamentProvider>} />
+          <Route path="/t/:tournamentId/admin/bracket" element={<TournamentProvider><AdminLayout><Bracket admin /></AdminLayout></TournamentProvider>} />
+        </Route>
 
         {/* 404 Catch-All */}
-        <Route path="*" element={
-          <div className="min-h-screen flex items-center justify-center bg-gray-50">
-            <div className="text-center">
-              <h1 className="text-4xl font-bold text-gray-900">404</h1>
-              <p className="text-gray-600 mt-2">Page not found</p>
-              <a href="/" className="text-blue-600 hover:underline mt-4 inline-block">Go Home</a>
-            </div>
-          </div>
-        } />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </AuthProvider>
   );
